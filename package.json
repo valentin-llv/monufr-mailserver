@@ -1,0 +1,13 @@
+{
+  "name": "mnoufr-mail",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/MonUFR-mail.js",
+    "prod": "node src/MonUFR-mail.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "imap-simple": "^5.1.0",
+    "nodemon": "^2.0.20"
+  }
+}
