@@ -21,14 +21,14 @@ https.createServer(
         return false;
     }
 
-    if(!allowedOrigins.includes(request.headers.origin)) {
-        response.writeHead(200, {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET",
-        });
-        response.end(`Origin ${request.headers.origin} is not allowed for the request.`);
-        return false;
-    }
+    // if(!allowedOrigins.includes(request.headers.origin)) {
+    //     response.writeHead(200, {
+    //         "Access-Control-Allow-Origin": "*",
+    //         "Access-Control-Allow-Methods": "GET",
+    //     });
+    //     response.end(`Origin ${request.headers.origin} is not allowed for the request.`);
+    //     return false;
+    // }
 
     let urlParams = parseUrl(request.url);
     if(!urlParams.action) {
@@ -61,7 +61,7 @@ https.createServer(
     let result = await new MailManager(urlParams.action, urlParams.id, urlParams.password, urlParams).treatAction();
 
     response.writeHead(200, {
-        "Access-Control-Allow-Origin": request.headers.origin,
+        "Access-Control-Allow-Origin": "*", // request.headers.origin
         "Access-Control-Allow-Methods": "GET",
     });
     response.end(JSON.stringify(result));
