@@ -208,7 +208,7 @@ class MailManager {
         } catch(e) { return false; }
         
         let searchedBoxes = [];
-        let ignoredBoxes = ["Junk", "Draft", "Drafts", "Sent"];
+        let ignoredBoxes = ["Junk", "Draft", "Drafts"];
         let boxesKeys = Object.keys(boxes);
 
         for(let i = 0; i < boxesKeys.length; i++) {
