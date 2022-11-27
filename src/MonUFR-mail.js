@@ -208,7 +208,7 @@ class MailManager {
         } catch(e) { return false; }
         
         let searchedBoxes = [];
-        let ignoredBoxes = ["Junk", "Draft", "Drafts"];
+        let ignoredBoxes = ["Junk", "Draft", "Drafts", "Sent"];
         let boxesKeys = Object.keys(boxes);
 
         for(let i = 0; i < boxesKeys.length; i++) {
@@ -253,7 +253,7 @@ class MailManager {
             });
         }
 
-        return mailsId;
+        return mailsId.reverse();
     }
 
     async downloadMail(connection, mailId) {
