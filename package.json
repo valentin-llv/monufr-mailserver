@@ -1,5 +1,5 @@
 {
-  "name": "mnoufr-mail",
+  "name": "monufr-mail",
   "type": "module",
   "scripts": {
     "dev": "nodemon src/MonUFR-mail.js",

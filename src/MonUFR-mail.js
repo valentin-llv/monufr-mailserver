@@ -1,18 +1,25 @@
 import https from "https";
+
 import fs from 'fs';
 import imaps from 'imap-simple';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 
+// Activate dotenv
 dotenv.config();
 
+// Create global variables
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(',');
 
+const serverOptions = {
+    key: fs.readFileSync(process.env.SSL_PRIVATEKEY),
+    cert: fs.readFileSync(process.env.SSL_FULLCHAIN),
+};
+
 https.createServer(
-    {
-        key: fs.readFileSync(process.env.SSL_PRIVATEKEY),
-        cert: fs.readFileSync(process.env.SSL_FULLCHAIN),
-    }, 
+    serverOptions,
+
     async (request, response) => {
+    // Check if request method is different than GET
     if(request.method != "GET") {
         response.writeHead(200, {
             "Access-Control-Allow-Origin": "*",
@@ -21,6 +28,7 @@ https.createServer(
         return false;
     }
 
+    //Check if origin is allowed
     if(!allowedOrigins.includes(request.headers.origin)) {
         response.writeHead(200, {
             "Access-Control-Allow-Origin": "*",
@@ -30,35 +38,60 @@ https.createServer(
         return false;
     }
 
-    let urlParams = parseUrl(request.url);
-    if(!urlParams.action) {
+    //Check if if url is valid
+    let requestUrl;
+    try {
+        requestUrl = new URL("https://server.ufr-planning.com" + request.url);
+    } catch(error) {
         response.writeHead(200, {
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": request.headers.origin,
             "Access-Control-Allow-Methods": "GET",
         });
-        response.end("Request action is not defined !");
+        response.end("Url is not valid.");
         return false;
     }
 
-    if(!urlParams.id) {
+    // if(request.url == "/favicon.ico") { // ------> remove
+    //     response.writeHead(200, {
+    //         "Access-Control-Allow-Origin": "*",
+    //         "Access-Control-Allow-Methods": "GET",
+    //     });
+    //     response.end("Request action is not defined.");
+    //     return false;
+    // }
+
+    // Check if requested url params are present
+    let requestAction = requestUrl.searchParams.get("action");
+    if(requestAction == null) {
         response.writeHead(200, {
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": request.headers.origin,
             "Access-Control-Allow-Methods": "GET",
         });
-        response.end("User id is not defined !");
+        response.end("Request action is not defined.");
+        return false;
+    }
+    
+    let requestUserId = requestUrl.searchParams.get("id");
+    if(requestUserId == null) {
+        response.writeHead(200, {
+            "Access-Control-Allow-Origin": request.headers.origin,
+            "Access-Control-Allow-Methods": "GET",
+        });
+        response.end("User id is not defined.");
         return false;
     }
 
-    if(!urlParams.password) {
+    let requestUserPassword = requestUrl.searchParams.get("password");
+    if(requestUserPassword == null) {
         response.writeHead(200, {
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": request.headers.origin,
             "Access-Control-Allow-Methods": "GET",
         });
-        response.end("User password is not defined !");
+        response.end("User password is not defined.");
         return false;
     }
 
-    let result = await new MailManager(urlParams.action, urlParams.id, urlParams.password, urlParams).treatAction();
+    let result = await new MailManager(requestAction, requestUserId, requestUserPassword, requestUrl.searchParams).treatAction();
 
     response.writeHead(200, {
         "Access-Control-Allow-Origin": request.headers.origin,
@@ -67,30 +100,13 @@ https.createServer(
     response.end(JSON.stringify(result));
 }).listen(process.env.SERVER_PORT);
 
-function parseUrl(url) {
-    let urlData = {};
-
-    url = url.slice(2, url.length);
-    let array = url.split('&');
-
-    for(let i = 0; i < array.length; i++) {
-        let equalIndex = array[i].indexOf("=");
-        let key = array[i].slice(0, equalIndex);
-        let value = array[i].slice(equalIndex + 1, array[i].length);
-
-        urlData[key] = value;
-    }
-
-    return urlData;
-}
-
 class MailManager {
-    constructor(action, id, password, urlParams) {
+    constructor(action, id, password, searchParams) {
         this.action = action;
-        this.id = decodeURI(id);
-        this.password = decodeURI(password);
+        this.id = id;
+        this.password = password;
 
-        this.urlParams = urlParams;
+        this.searchParams = searchParams;
     }
 
     async treatAction() {
@@ -109,33 +125,39 @@ class MailManager {
         }
 
         if(this.action == "getMail") {
-            let box = decodeURI(this.urlParams.box);
-            let mailId = decodeURI(this.urlParams.mailId);
+            let box = this.searchParams.get("box");
+            let mailId = this.searchParams.get("mailId");
 
-            if(!box || !mailId) return { status: "fail" };
+            if(box == null || mailId == null || !box || !mailId) return { status: "fail" };
             result = await this.getMail(connection, box, mailId);
         }
 
-        if(this.action == "setRead") {
-            let box = decodeURI(this.urlParams.box);
-            let mailId = decodeURI(this.urlParams.mailId);
+        if(this.action == "getAttachment") {
+            let box = this.searchParams.get("box");
+            let mailId = this.searchParams.get("mailId");
 
-            if(!box || !mailId) return { status: "fail" };
+            if(box == null || mailId == null || !box || !mailId) return { status: "fail" };
+            result = await this.getAttachment(connection, box, mailId);
+        }
+
+        if(this.action == "setRead") {
+            let box = this.searchParams.get("box");
+            let mailId = this.searchParams.get("mailId");
+
+            if(box == null || mailId == null || !box || !mailId) return { status: "fail" };
             result = await this.setRead(connection, box, mailId);
         }
 
         if(this.action == "moveMail") {
-            let box = decodeURI(this.urlParams.box);
-            let newBox = decodeURI(this.urlParams.newBox);
-            let mailId = decodeURI(this.urlParams.mailId);
+            let box = this.searchParams.get("box");
+            let newBox = this.searchParams.get("newBox");
+            let mailId = this.searchParams.get("mailId");
 
-            if(!box || !mailId || !newBox) return { status: "fail" };
+            if(box == null || newBox == null || mailId == null || !box || !mailId || !newBox) return { status: "fail" };
             result = await this.moveMail(connection, box, newBox, mailId);
         }
 
-        if(!result || result.status != "succes") {
-            return { status: "fail" };
-        }
+        if(!result || result.status != "succes") return { status: "fail" };
 
         connection.end();
         return { status: "succes", content: result.content };
@@ -174,29 +196,54 @@ class MailManager {
     async getMail(connection, box, mailId) {
         let state = await this.openBox(connection, box);
         if(!state) return { status:"fail", content: "" };
-
-        let mail = await this.downloadMail(connection, mailId);
-        if(!mail || (Array.isArray(mail) && mail.length == 0)) return { status:"fail", content: "" };
-
-        let mailsData = await this.parseMail(connection, mail);
-        if(mailsData.status != "succes") return { status:"fail", content: "" };
         
-        return { status:"succes", content: mailsData };
+        let mailStruct = await this.downloadMailStruct(connection, mailId);
+        if(!mailStruct || (Array.isArray(mailStruct) && mailStruct.length == 0)) return { status:"fail", content: "" };
+
+        let getPartsResult = this.getMailParts(mailStruct);
+        if(getPartsResult.status != "succes") return { status:"fail", content: "" };
+
+        let parsingResult = this.parseMail(mailStruct, getPartsResult.content);
+        if(parsingResult.status != "succes") return { status:"fail", content: "" };
+
+        let mailContentResult = await this.downloadParts(connection, mailStruct, ["PLAIN", "HTML"], getPartsResult.content);
+        if(mailContentResult.status != "succes") return { status:"fail", content: "" };
+
+        let mailData = {
+            ...parsingResult.content,
+            ...mailContentResult.content,
+        }
+        
+        return { status:"succes", content: mailData };
+    }
+
+    async getAttachment(connection, box, mailId) {
+        let state = await this.openBox(connection, box);
+        if(!state) return { status:"fail", content: "" };
+        
+        let mailStruct = await this.downloadMailStruct(connection, mailId);
+        if(!mailStruct || (Array.isArray(mailStruct) && mailStruct.length == 0)) return { status:"fail", content: "" };
+
+        let getPartsResult = this.getMailParts(mailStruct);
+        if(getPartsResult.status != "succes") return { status:"fail", content: "" };
+
+        let mailContentResult = await this.downloadParts(connection, mailStruct, ["ATTACHMENT"], getPartsResult.content);
+        if(mailContentResult.status != "succes") return { status:"fail", content: "" };
+        
+        return { status:"succes", content: mailContentResult.content };
     }
 
     async setRead(connection, box, mailId) {
         await this.openBox(connection, box);
-        let result = await connection.addFlags(decodeURI(mailId), "\\Seen").catch(() => { return { status: "fail" } });
+        let result = await connection.addFlags(mailId, "\\Seen").catch(() => { return { status: "fail" } });
 
         if(result && result.status && result.status != "succes") return result;
         return { status: "succes" };
     }
 
     async moveMail(connection, box, newBox, mailId) {
-        console.log(newBox)
-
         await this.openBox(connection, box);
-        let result = await connection.moveMessage(mailId, newBox).catch((error) => { console.log(error); return { status: "fail" }; });
+        let result = await connection.moveMessage(mailId, newBox).catch((error) => { return { status: "fail" }; });
 
         if(result && result.status && result.status != "succes") return result;
         return { status: "succes" };
@@ -256,52 +303,75 @@ class MailManager {
         return mailsId.reverse();
     }
 
-    async downloadMail(connection, mailId) {
+    async downloadMailStruct(connection, mailId) {
         return await connection.search([["UID", mailId + ""]], {
-            bodies: ['HEADER.FIELDS (FROM TO SUBJECT CC)', 'TEXT'],
+            bodies: ['HEADER.FIELDS (FROM TO SUBJECT CC ATTACHMENTS)'],
             struct: true,
-        }).catch(() => { return false; });
+        }).catch((error) => { return false; });
     }
 
-    async parseMail(connection, message) {
-        let parsedMessage = {
-            text: null,
-            html: null,
-            attachements: [],
+    parseMail(message, parts) {
+        let attachments = [];
+        for(let j = 0; j < parts.length; j++) {
+            if(parts[j].disposition && parts[j].disposition.type.toUpperCase() == 'ATTACHMENT') {
+                attachments.push({
+                    filename: parts[j].disposition.params.filename,
+                    fileType: parts[j].subtype,
+                });
+            }
+        }
 
-            flags: message[0].attributes.flags,
+        let parsedMessage = {
+            flags: message[0].attributes.flags, // ----> remove after frontend update
             uid: message[0].attributes.uid,
             title: message[0].parts[0].body.subject,
             date: message[0].attributes.date,
             from: message[0].parts[0].body.from,
             to: message[0].parts[0].body.to,
             cc: message[0].parts[0].body.cc,
+            attachments: attachments,
         };
 
+        return { status: "succes", content: parsedMessage };
+    }
+
+    getMailParts(mailStruct) {
         let parts;
-        try { parts = await imaps.getParts(message[0].attributes.struct);
-        } catch(e) { return { status: "succes", content: parsedMessage } }
+        try { parts = imaps.getParts(mailStruct[0].attributes.struct);
+        } catch(e) { return { status: "succes", content: "" } }
+
+        return { status: "succes", content: parts };
+    }
+
+    async downloadParts(connection, mailStruct, selectedParts, parts) {
+        let partsData = {};
 
         for(let j = 0; j < parts.length; j++) {
-            if(parts[j].disposition && parts[j].disposition.type.toUpperCase() == 'ATTACHMENT') {
-                let partData = await connection.getPartData(message[0], parts[j]).catch(() => { return { status: "fail" };; });
+            let partType;
 
-                if(partData) {
-                    parsedMessage.attachements.push({
-                        filename: parts[j].disposition.params.filename,
-                        fileType: parts[j].subtype,
-                        data: partData,
-                    });
+            if(selectedParts.includes('ATTACHMENT') && parts[j].disposition) {
+                partType = parts[j].disposition.type.toUpperCase();
+                if(partType == 'ATTACHMENT') {
+                    let partData = await connection.getPartData(mailStruct[0], parts[j]).catch(() => { return { status: "fail" };; });
+
+                    if(partData) {
+                        if(!partsData[partType]) partsData[partType] = [];
+
+                        partsData[partType].push({
+                            filename: parts[j].disposition.params.filename,
+                            fileType: parts[j].subtype,
+                            data: partData,
+                        });
+                    }
                 }
-            } else if(parts[j].subtype.toUpperCase() == 'HTML') {
-                let partData = await connection.getPartData(message[0], parts[j]).catch(() => { return { status: "fail" }; });
-                parsedMessage.html = partData;
-            } else if(parts[j].subtype.toUpperCase() == 'PLAIN') {
-                let partData = await connection.getPartData(message[0], parts[j]).catch(() => { return { status: "fail" }; });
-                parsedMessage.text = partData;
+            }
+
+            partType = parts[j].subtype.toUpperCase();
+            if((selectedParts.includes('HTML') || selectedParts.includes('PLAIN')) && ["PLAIN", "HTML"].includes(partType)) {
+                partsData[partType] = await connection.getPartData(mailStruct[0], parts[j]).catch(() => { return { status: "fail" }; });
             }
         }
 
-        return { status: "succes", content: parsedMessage };
+        return { status: "succes", content: partsData };
     }
 }
