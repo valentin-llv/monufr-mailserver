@@ -1,6 +1,8 @@
 # MonUFR mail server
 
-This server is the brige between the IMAP mail server and the client app.
+Note: the project is no longuer maintained as the mail feature for MonUFR was abandoned. 
+
+This server is the brige between the IMAP mail server and MonUFR client app.
 
 ## Requiered libs
 - nodemon
