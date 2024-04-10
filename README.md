@@ -1,6 +1,6 @@
 # MonUFR mail server
 
-Note: the project is no longuer maintained as the mail feature for MonUFR was abandoned. 
+**Note: the project is no longuer maintained as the mail feature for MonUFR was abandoned.**
 
 This server is the brige between the IMAP mail server and MonUFR client app.
 
